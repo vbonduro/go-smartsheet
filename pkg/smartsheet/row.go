@@ -18,8 +18,9 @@ package smartsheet
 
 import (
 	"fmt"
-	"github.com/mitchellh/mapstructure"
 	"time"
+
+	"github.com/mitchellh/mapstructure"
 )
 
 type Row struct {
@@ -44,8 +45,11 @@ type Row struct {
 	Permalink         string       `json:"permalink,omitempty"`         // URL that represents a direct link to the row in Smartsheet. Only returned if the include query string parameter contains rowPermalink.
 	Rownumber         int64        `json:"rownumber,omitempty"`         // Row int within the sheet (1-based - starts at 1)
 	Version           int64        `json:"version,omitempty"`           // Sheet version int that is incremented every time a sheet is modified
-	ToTop             bool         `json:"toTop,omitempty"`
-	ToBottom          bool         `json:"toBottom,omitempty"`
+	ToTop             bool         `json:"toTop,omitempty"`             // Top of a sheet
+	ToBottom          bool         `json:"toBottom,omitempty"`          // Bottom of a sheet
+	// vbonduro: Adding parent and sibling id. This allows us to determine parent-child relationships between rows.
+	ParentId  int64 `json:"parentId,omitempty"`  // Row Id of the row that this row is indented under
+	SiblingId int64 `json:"siblingId,omitempty"` // Row Id of the row's sibling
 }
 
 // Return number of cells in the row
@@ -57,6 +61,21 @@ func (r Row) CellCount() int {
 func (c Client) AddRow(sheetId int64, rows []Row) (*[]Row, error) {
 	var res ResultObject
 	resp, err := c.post(fmt.Sprintf("%s/sheets/%d/rows", apiEndpoint, sheetId), rows, nil)
+	if err != nil {
+		return nil, err
+	}
+	if dErr := c.decodeJSON(resp, &res); dErr != nil {
+		return nil, fmt.Errorf("could not decode JSON response: %v", dErr)
+	}
+	var result []Row
+	err = mapstructure.Decode(res.Result, &result)
+	return &result, nil
+}
+
+// vbonduro: Ad API for updating an existing row.
+func (c Client) UpdateRow(sheetId int64, rows []Row) (*[]Row, error) {
+	var res ResultObject
+	resp, err := c.put(fmt.Sprintf("%s/sheets/%d/rows", apiEndpoint, sheetId), rows, nil)
 	if err != nil {
 		return nil, err
 	}
